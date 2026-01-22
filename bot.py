@@ -44,15 +44,29 @@ class InviteCallback(CallbackData, prefix="invite"):
 def admin_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="➕ Створити івент")],
-            [KeyboardButton(text="📅 Активні події")],
-            [KeyboardButton(text="👥 Список гравців")],
-            [KeyboardButton(text="🛠 Адмін: список + скасовані")],
-            [KeyboardButton(text="✅ Підтвердити подію")],
-            [KeyboardButton(text="❌ Скасувати івент")],
+            # Управління івентами
+            [
+                KeyboardButton(text="➕ Створити івент"),
+                KeyboardButton(text="📅 Активні події"),
+            ],
+            # Списки
+            [
+                KeyboardButton(text="👥 Список гравців"),
+                KeyboardButton(text="🛠 Адмін: список + скасовані"),
+            ],
+            # Дії під час вечора
+            [
+                KeyboardButton(text="✅ Підтвердити подію"),
+                KeyboardButton(text="💳 Оплатити ігри"),
+            ],
+            # Небезпечна дія — окремо
+            [
+                KeyboardButton(text="❌ Скасувати івент"),
+            ],
         ],
         resize_keyboard=True
     )
+
 
 def invite_keyboard(event_id: int):
     return InlineKeyboardMarkup(
@@ -93,6 +107,7 @@ def player_menu_keyboard():
         keyboard=[
             [KeyboardButton(text="📅 Активні події")],
             [KeyboardButton(text="👥 Список гравців")],
+            [KeyboardButton(text="💳 Оплатити ігри")],
         ],
         resize_keyboard=True
     )
@@ -704,6 +719,41 @@ async def admin_confirm_cancel(callback: types.CallbackQuery):
         await callback.answer("Івент закрито")
     finally:
         await conn.close()
+# ================== Сплата ігор ==================
+@dp.message(F.text == "💳 Оплатити ігри")
+async def pay_games(message: types.Message):
+    await message.answer(
+        "💳 **Оплата ігрових вечорів**\n\n"
+        "Оплату можна здійснити зарахуванням на банку Monobank:\n\n"
+        "👉 https://send.monobank.ua/jar/9zwCYtSQ6Z\n\n"
+        "Після оплати натисніть кнопку нижче 👇",
+        parse_mode="Markdown",
+        reply_markup=payment_inline_keyboard()
+    )
+
+def payment_inline_keyboard():
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="💳 Я оплатив",
+                    callback_data="payment_done"
+                )
+            ]
+        ]
+    )
+    
+@dp.callback_query(F.data == "payment_done")
+async def payment_done(callback: types.CallbackQuery):
+    await callback.answer("Дякуємо за оплату 💚")
+    
+    # прибираємо кнопку (як у магазинах після покупки)
+    await callback.message.edit_reply_markup(reply_markup=None)
+
+    await callback.message.reply(
+        "✅ Оплату відмічено.\n"
+    )
+
 # ================== RUNNER & WEB SERVER ==================
 
 async def handle(request):
