@@ -48,7 +48,7 @@ def admin_menu_keyboard():
             [KeyboardButton(text="📅 Активні події")],
             [KeyboardButton(text="👥 Список гравців")],
             [KeyboardButton(text="🛠 Адмін: список + скасовані")],
-            [KeyboardButton(text="✅ Підтвердити вечір")],
+            [KeyboardButton(text="✅ Підтвердити подію")],
             [KeyboardButton(text="❌ Скасувати івент")],
         ],
         resize_keyboard=True
@@ -96,35 +96,6 @@ def player_menu_keyboard():
         ],
         resize_keyboard=True
     )
-
-
-def admin_menu_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            # Перший ряд: Основні дії з івентом
-            [
-                KeyboardButton(text="➕ Створити івент"),
-                KeyboardButton(text="📅 Активні події")
-            ],
-            # Другий ряд: Робота з гравцями та списками
-            [
-                KeyboardButton(text="👥 Список гравців"),
-                KeyboardButton(text="🛠 Адмін: список + скасовані")
-            ],
-            # Третій ряд: Управління поточним вечором
-            [
-                KeyboardButton(text="✅ Підтвердити вечір"),
-                KeyboardButton(text="🏁 Завершити вечір")
-            ],
-            # Четвертий ряд: "Небезпечна" кнопка (окремо, щоб не натиснути випадково)
-            [
-                KeyboardButton(text="❌ Скасувати івент")
-            ]
-        ],
-        resize_keyboard=True
-    )
-
-
 
 # ================== START / NICKNAME ==================
 
@@ -391,7 +362,7 @@ async def process_send_confirmation(callback: types.CallbackQuery):
             try:
                 await bot.send_message(
                     p['user_id'], 
-                    "✅ Ігровий вечір в силі! Чекаємо на тебе🫶"
+                    "✅ Ігрова подія в силі! Чекаємо на тебе🫶"
                 )
                 success_count += 1
             except Exception:
@@ -759,6 +730,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
