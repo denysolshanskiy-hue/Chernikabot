@@ -1,0 +1,2 @@
+BOT_TOKEN = "8547165790:AAGmx_hOzPtu9LLl95eXMAA6WbZVw0Jv3cg"
+DB_PATH = "mafia_bot.db"
