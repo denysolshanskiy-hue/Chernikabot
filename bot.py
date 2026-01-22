@@ -98,12 +98,6 @@ def cancel_keyboard(event_id: int):
 
 def player_menu_keyboard():
     return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="📅 Активні події")]],
-        resize_keyboard=True,
-    )
-
-def player_menu_keyboard():
-    return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📅 Активні події")],
             [KeyboardButton(text="👥 Список гравців")],
@@ -832,6 +826,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
