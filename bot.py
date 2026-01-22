@@ -704,7 +704,7 @@ async def admin_confirm_cancel(callback: types.CallbackQuery):
             try:
                 await bot.send_message(
                     p['user_id'], 
-                    "😔 На жаль, ігровий вечір скасовано. Слідкуйте за новими анонсами!"
+                    "😔 На жаль, ігрову подію скасовано. Слідкуйте за новими анонсами!"
                 )
             except:
                 continue
@@ -826,6 +826,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
