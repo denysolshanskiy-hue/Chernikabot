@@ -724,7 +724,13 @@ async def admin_confirm_cancel(callback: types.CallbackQuery):
 async def pay_games(message: types.Message):
     await message.answer(
         "💳 **Оплата ігрових вечорів**\n\n"
-        "Оплату можна здійснити зарахуванням на банку Monobank:\n\n"
+        "М А Ф І Я\n\n
+         Ігровий вечір 350 грн.\n\n
+         Одна гра 150 грн.\n\n
+         🔗Посилання на банку\n\n
+         https://send.monobank.ua/jar/7eyHDYKjeX\n\n
+         💳Номер картки банки\n\n
+         4874 1000 2416 5600\n\n"
         "👉 https://send.monobank.ua/jar/9zwCYtSQ6Z\n\n"
         "Після оплати натисніть кнопку нижче 👇",
         parse_mode="Markdown",
@@ -780,6 +786,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
