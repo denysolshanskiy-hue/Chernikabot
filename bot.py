@@ -476,51 +476,68 @@ async def save_comment(message: types.Message, state: FSMContext):
 async def invite_cancel(callback: types.CallbackQuery, callback_data: InviteCallback):
     user_id = callback.from_user.id
     event_id = callback_data.event_id
-    MY_ADMIN_ID = 444726017  
 
     conn = await get_connection()
     try:
-        # 1. Отримуємо дані одним запитом: назву івенту та нікнейм користувача
-        event_title = await conn.fetchval("SELECT title FROM events WHERE event_id = $1", int(event_id))
-        user_nick = await conn.fetchval("SELECT display_name FROM users WHERE user_id = $1", int(user_id))
-        
-        # Якщо нік раптом не знайдено (хоча він має бути), використовуємо повне ім'я з телеграму
+        # 1. Дані івенту та гравця
+        event_title = await conn.fetchval(
+            "SELECT title FROM events WHERE event_id = $1",
+            event_id
+        )
+
+        user_nick = await conn.fetchval(
+            "SELECT display_name FROM users WHERE user_id = $1",
+            user_id
+        )
+
         display_name = user_nick or callback.from_user.full_name
 
-        # 2. Оновлюємо статус у базі
+        # 2. Скасовуємо реєстрацію
         await conn.execute(
-            "UPDATE registrations SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE event_id = $1 AND user_id = $2",
-            int(event_id), int(user_id)
+            """
+            UPDATE registrations
+            SET status = 'cancelled', updated_at = CURRENT_TIMESTAMP
+            WHERE event_id = $1 AND user_id = $2 AND status = 'active'
+            """,
+            event_id,
+            user_id
         )
-        
-        # 3. Прибираємо кнопки та підтверджуємо гравцю
+
+        # 3. Відповідь гравцю
         await callback.message.edit_reply_markup(reply_markup=None)
         await callback.answer("Запис скасовано")
         await bot.send_message(user_id, "❌ Ви скасували свій запис на івент")
 
-        # 4. СПОВІЩЕННЯ АДМІНА (тепер з ніком)
-        # Додаємо умову, щоб не спамити вам, коли ви самі скасовуєте (якщо хочете бачити завжди — просто видаліть if)
-        if user_id != MY_ADMIN_ID:
-            await bot.send_message(
-                chat_id=MY_ADMIN_ID,
-                text=(
-                    f"⚠️ **Скасування реєстрації!**\n\n"
-                    f"🎭 Івент: **{event_title or 'Невідомий'}**\n"
-                    f"👤 Гравець: **{display_name}**\n"
-                    f"🆔 ID: `{user_id}`"
-                ),
-                parse_mode="Markdown"
-            )
+        # 4. Отримуємо ВСІХ адмінів
+        admins = await conn.fetch(
+            "SELECT user_id FROM users WHERE role = 'admin' AND is_active = 1"
+        )
+
+        # 5. Сповіщаємо адмінів (крім того, хто скасував)
+        for admin in admins:
+            admin_id = admin["user_id"]
+
+            if admin_id == user_id:
+                continue
+
+            try:
+                await bot.send_message(
+                    chat_id=admin_id,
+                    text=(
+                        f"⚠️ **Скасування реєстрації**\n\n"
+                        f"🎭 Івент: **{event_title or 'Невідомий'}**\n"
+                        f"👤 Гравець: **{display_name}**\n"
+                        f"🆔 ID: `{user_id}`"
+                    ),
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                continue
 
     except Exception as e:
         print(f"ПОМИЛКА ОБРОБКИ SQL: {e}")
     finally:
         await conn.close()
-
-@dp.callback_query(InviteCallback.filter(F.action == "ignore"))
-async def invite_ignore(callback: types.CallbackQuery):
-    await callback.answer("Проігноровано")
-    await callback.message.delete()
 
 # ================== ADMIN ACTIONS ==================
 
@@ -742,6 +759,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
