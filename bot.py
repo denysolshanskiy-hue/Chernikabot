@@ -61,6 +61,7 @@ def admin_menu_keyboard():
             ],
             # Небезпечна дія — окремо
             [
+                KeyboardButton(text= "🏁 Завершити вечір"),
                 KeyboardButton(text="❌ Скасувати івент"),
             ],
         ],
@@ -826,6 +827,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
