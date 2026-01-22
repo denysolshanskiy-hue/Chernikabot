@@ -723,16 +723,22 @@ async def admin_confirm_cancel(callback: types.CallbackQuery):
 @dp.message(F.text == "💳 Оплатити ігри")
 async def pay_games(message: types.Message):
     await message.answer(
-        "💳 **Оплата ігрових вечорів**\n\n"
-        "М А Ф І Я\n\n
-         Ігровий вечір 350 грн.\n\n
-         Одна гра 150 грн.\n\n
-         🔗Посилання на банку\n\n
-         https://send.monobank.ua/jar/7eyHDYKjeX\n\n
-         💳Номер картки банки\n\n
-         4874 1000 2416 5600\n\n"
-        "👉 https://send.monobank.ua/jar/9zwCYtSQ6Z\n\n"
-        "Після оплати натисніть кнопку нижче 👇",
+        """
+💳 **Оплата ігрових вечорів**
+
+**М А Ф І Я**
+
+🎭 Ігровий вечір — **350 грн**
+🎲 Одна гра — **150 грн**
+
+🔗 **Посилання на банку:**
+https://send.monobank.ua/jar/7eyHDYKjeX
+
+💳 **Номер картки банки:**
+`4874 1000 2416 5600`
+
+Після оплати натисніть кнопку нижче 👇
+        """,
         parse_mode="Markdown",
         reply_markup=payment_inline_keyboard()
     )
@@ -751,14 +757,54 @@ def payment_inline_keyboard():
     
 @dp.callback_query(F.data == "payment_done")
 async def payment_done(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+
+    # 1. Отримуємо нік гравця
+    conn = await get_connection()
+    try:
+        row = await conn.fetchrow(
+            "SELECT display_name FROM users WHERE user_id = $1",
+            user_id
+        )
+        display_name = row["display_name"] if row and row["display_name"] else callback.from_user.full_name
+
+        # 2. Отримуємо всіх адмінів
+        admins = await conn.fetch(
+            "SELECT user_id FROM users WHERE role = 'admin' AND is_active = 1"
+        )
+    finally:
+        await conn.close()
+
+    # 3. UX для гравця
     await callback.answer("Дякуємо за оплату 💚")
-    
-    # прибираємо кнопку (як у магазинах після покупки)
     await callback.message.edit_reply_markup(reply_markup=None)
 
     await callback.message.reply(
-        "✅ Оплату відмічено.\n"
+        "✅ Оплату зафіксовано.\n"
+        "Дякуємо за підтримку клубу 🙏"
     )
+
+    # 4. Сповіщення адмінам
+    for admin in admins:
+        admin_id = admin["user_id"]
+
+        # не спамимо адміну, якщо він сам натиснув
+        if admin_id == user_id:
+            continue
+
+        try:
+            await callback.bot.send_message(
+                admin_id,
+                (
+                    f"💳 **Гравець здійснив оплату**\n\n"
+                    f"👤 Нік: **{display_name}**\n"
+                    f"🆔 ID: `{user_id}`"
+                ),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            continue
+
 
 # ================== RUNNER & WEB SERVER ==================
 
@@ -786,6 +832,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
