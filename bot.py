@@ -176,7 +176,6 @@ async def create_event_start(message: types.Message, state: FSMContext):
     finally:
         await conn.close()
 
-    await state.clear()
     await message.answer("📝 Введіть назву івенту:")
     await state.set_state(CreateEventStates.waiting_for_title)
     
@@ -453,6 +452,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
