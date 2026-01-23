@@ -44,6 +44,7 @@ def admin_menu():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="➕ Створити івент"), KeyboardButton(text="📅 Активні події")],
+            [KeyboardButton(text="💳 Оплатити ігри")],
         ],
         resize_keyboard=True
     )
@@ -52,6 +53,7 @@ def player_menu():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📅 Активні події")],
+            [KeyboardButton(text="💳 Оплатити ігри")],
         ],
         resize_keyboard=True
     )
@@ -106,11 +108,16 @@ async def start(message: types.Message, state: FSMContext):
 
 @dp.message(Nickname.value)
 async def save_nick(message: types.Message, state: FSMContext):
-    await get_connection().execute(
-        "UPDATE users SET display_name=$1 WHERE user_id=$2",
-        message.text.strip(),
-        message.from_user.id
-    )
+    conn = await get_connection()
+    try:
+        await conn.execute(
+            "UPDATE users SET display_name=$1 WHERE user_id=$2",
+            message.text.strip(),
+            message.from_user.id
+        )
+    finally:
+        await conn.close()
+
     await state.clear()
     await message.answer("✅ Готово!", reply_markup=player_menu())
 
@@ -271,5 +278,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
