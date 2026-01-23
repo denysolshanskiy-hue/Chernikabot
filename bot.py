@@ -696,6 +696,68 @@ async def send_event_confirmation(callback: types.CallbackQuery):
     finally:
         await conn.close()
 
+# ================== PLAYER LIST\CANCEL =====================
+@dp.message(F.text == "🛠 Адмін: список + скасовані")
+async def admin_players_with_cancelled(message: types.Message):
+    conn = await get_connection()
+    try:
+        role = await conn.fetchval(
+            "SELECT role FROM users WHERE user_id = $1",
+            message.from_user.id
+        )
+        if role != "admin":
+            await message.answer("❌ Доступ лише для адміністратора")
+            return
+
+        events = await conn.fetch(
+            """
+            SELECT event_id, title
+            FROM events
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            """
+        )
+
+        if not events:
+            await message.answer("ℹ️ Немає активних івентів")
+            return
+
+        for event in events:
+            rows = await conn.fetch(
+                """
+                SELECT u.display_name, r.status, r.comment
+                FROM registrations r
+                JOIN users u ON u.user_id = r.user_id
+                WHERE r.event_id = $1
+                ORDER BY r.created_at
+                """,
+                event["event_id"]
+            )
+
+            active = []
+            cancelled = []
+
+            for r in rows:
+                name = r["display_name"]
+                if r["comment"]:
+                    name += f" ({r['comment']})"
+
+                if r["status"] == "active":
+                    active.append(name)
+                elif r["status"] == "cancelled":
+                    cancelled.append(r["display_name"])
+
+            text = f"🛠 *{event['title']}*\n\n"
+
+            text += "✅ **Активні:**\n"
+            text += "\n".join(f"{i+1}. {p}" for i, p in enumerate(active)) or "—"
+            text += "\n\n❌ **Скасували:**\n"
+            text += "\n".join(f"{i+1}. {p}" for i, p in enumerate(cancelled)) or "—"
+
+            await message.answer(text, parse_mode="Markdown")
+
+    finally:
+        await conn.close()
 
 # ================== WEBHOOK ==================
 
@@ -729,6 +791,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
