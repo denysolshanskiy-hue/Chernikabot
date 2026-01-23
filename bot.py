@@ -236,10 +236,11 @@ async def create_event_location(message: types.Message, state: FSMContext):
                     parse_mode="Markdown",
                     reply_markup=invite_keyboard(event_id)
                 )
+                        sent_count += 1
             except Exception:
                 continue
 
-        await message.answer("✅ Івент створено та розіслано гравцям")
+        await message.answer("✅ Івент створено та розіслано гравцям (**{sent_count}**)"
         await state.clear()
 
     finally:
@@ -550,6 +551,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
