@@ -13,7 +13,6 @@ from aiogram.types import (
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters.callback_data import CallbackData
-from aiogram.client.session.aiohttp import AiohttpSession
 
 # Імпортуємо функції з вашого нового database.py
 from database import get_connection, init_db
@@ -25,7 +24,9 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 WEBHOOK_PATH = "/webhook"
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # повний URL
-
+if not WEBHOOK_URL:
+    raise RuntimeError("WEBHOOK_URL is not set")
+    
 # ================== STATES ==================
 class CreateEventStates(StatesGroup):
     waiting_for_title = State()
@@ -809,24 +810,10 @@ async def start_all():
     # 1. Ініціалізація БД
     await init_db()
 
-    # 2. Веб-сервер
-    app = web.Application()
-    app.router.add_get('/', handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, '0.0.0.0', int(os.environ.get("PORT", 10000)))
-    await site.start()
-
-    # 3. Бот
-    print("Starting bot...")
-
-async def start_all():
-    # 1. Ініціалізація БД
-    await init_db()
-
     # 2. Встановлюємо webhook Telegram
+    await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
-
+    
     # 3. aiohttp app
     app = web.Application()
 
@@ -856,6 +843,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
