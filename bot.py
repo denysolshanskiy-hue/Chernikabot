@@ -338,6 +338,103 @@ async def save_comment(message: types.Message, state: FSMContext):
     finally:
         await conn.close()
 
+# ================== CANCEL EVENT ==================
+
+@dp.message(F.text == "❌ Скасувати івент")
+async def request_cancel_event(message: types.Message):
+    conn = await get_connection()
+    try:
+        role = await conn.fetchval(
+            "SELECT role FROM users WHERE user_id = $1",
+            message.from_user.id
+        )
+        if role != "admin":
+            await message.answer("❌ Команда доступна лише адміну")
+            return
+
+        event = await conn.fetchrow(
+            """
+            SELECT event_id, title, event_date
+            FROM events
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        )
+
+        if not event:
+            await message.answer("ℹ️ Немає активних івентів для скасування")
+            return
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🔥 ПІДТВЕРДИТИ СКАСУВАННЯ",
+                        callback_data=f"confirm_cancel_{event['event_id']}"
+                    )
+                ]
+            ]
+        )
+
+        await message.answer(
+            f"❗ Ви впевнені, що хочете скасувати івент?\n\n"
+            f"🎭 *{event['title']}*\n"
+            f"📅 {event['event_date']}",
+            parse_mode="Markdown",
+            reply_markup=kb
+        )
+
+    finally:
+        await conn.close()
+
+@dp.callback_query(F.data.startswith("confirm_cancel_"))
+async def confirm_cancel_event(callback: types.CallbackQuery):
+    event_id = int(callback.data.split("_")[2])
+
+    conn = await get_connection()
+    try:
+        role = await conn.fetchval(
+            "SELECT role FROM users WHERE user_id = $1",
+            callback.from_user.id
+        )
+        if role != "admin":
+            await callback.answer("❌ Немає прав", show_alert=True)
+            return
+
+        players = await conn.fetch(
+            """
+            SELECT user_id
+            FROM registrations
+            WHERE event_id = $1 AND status = 'active'
+            """,
+            event_id
+        )
+
+        await conn.execute(
+            "UPDATE events SET status = 'closed' WHERE event_id = $1",
+            event_id
+        )
+
+        for p in players:
+            try:
+                await callback.bot.send_message(
+                    p["user_id"],
+                    "😔 На жаль, ігрову подію скасовано. Слідкуйте за новими анонсами."
+                )
+            except Exception:
+                continue
+
+        await callback.message.edit_text(
+            f"✅ Івент скасовано.\n"
+            f"👥 Гравців сповіщено: **{len(players)}**",
+            parse_mode="Markdown"
+        )
+        await callback.answer("Івент скасовано")
+
+    finally:
+        await conn.close()
+
 # ================== PLAYERS LIST ==================
 
 @dp.callback_query(InviteCallback.filter(F.action == "players"))
@@ -453,6 +550,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
