@@ -1,6 +1,7 @@
 import asyncio
 import os
 from aiohttp import web
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -22,6 +23,8 @@ from database import get_connection, init_db
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # повний URL
 
 # ================== STATES ==================
 class CreateEventStates(StatesGroup):
@@ -802,10 +805,6 @@ async def payment_done(callback: types.CallbackQuery):
 
 
 # ================== RUNNER & WEB SERVER ==================
-
-async def handle(request):
-    return web.Response(text="Bot is running!")
-
 async def start_all():
     # 1. Ініціалізація БД
     await init_db()
@@ -820,13 +819,44 @@ async def start_all():
 
     # 3. Бот
     print("Starting bot...")
-    await dp.start_polling(bot)
+
+async def start_all():
+    # 1. Ініціалізація БД
+    await init_db()
+
+    # 2. Встановлюємо webhook Telegram
+    await bot.set_webhook(WEBHOOK_URL)
+
+    # 3. aiohttp app
+    app = web.Application()
+
+    # 4. Реєструємо webhook handler для aiogram
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+    ).register(app, path=WEBHOOK_PATH)
+
+    # 5. startup / shutdown хуки
+    setup_application(app, dp, bot=bot)
+
+    # 6. Запуск сервера
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(
+        runner,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+    )
+    await site.start()
+
+    print("🚀 Webhook bot started")
 
 if __name__ == "__main__":
     try:
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
