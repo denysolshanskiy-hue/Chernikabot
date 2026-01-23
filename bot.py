@@ -4,12 +4,7 @@ from aiohttp import web
 
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import CommandStart
-from aiogram.types import (
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
-)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters.callback_data import CallbackData
@@ -21,315 +16,204 @@ from database import get_connection, init_db
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
-WEBHOOK_PATH = "/webhook"
-PORT = int(os.environ.get("PORT", 10000))
+PORT = int(os.getenv("PORT", 10000))
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is not set")
-if not WEBHOOK_URL:
-    raise RuntimeError("WEBHOOK_URL is not set")
-
-bot = Bot(token=BOT_TOKEN)
+bot = Bot(BOT_TOKEN)
 dp = Dispatcher()
 
 # ================== STATES ==================
 
-class CreateEventStates(StatesGroup):
+class CreateEvent(StatesGroup):
     title = State()
     date = State()
     time = State()
     location = State()
 
-class NicknameState(StatesGroup):
-    waiting_for_nickname = State()
+class Nickname(StatesGroup):
+    value = State()
 
-class CommentState(StatesGroup):
-    waiting_for_comment = State()
+# ================== CALLBACK ==================
 
-# ================== CALLBACK DATA ==================
-
-class InviteCallback(CallbackData, prefix="invite"):
-    action: str
+class EventCallback(CallbackData, prefix="event"):
+    action: str   # join | players
     event_id: int
 
 # ================== KEYBOARDS ==================
 
-def admin_menu_keyboard():
+def admin_menu():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="➕ Створити івент"), KeyboardButton(text="📅 Активні події")],
-            [KeyboardButton(text="👥 Список гравців"), KeyboardButton(text="🛠 Адмін: список + скасовані")],
-            [KeyboardButton(text="✅ Підтвердити подію"), KeyboardButton(text="💳 Оплатити ігри")],
-            [KeyboardButton(text="🏁 Завершити вечір"), KeyboardButton(text="❌ Скасувати івент")],
         ],
         resize_keyboard=True
     )
 
-def player_menu_keyboard():
+def player_menu():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📅 Активні події")],
-            [KeyboardButton(text="👥 Список гравців")],
-            [KeyboardButton(text="💳 Оплатити ігри")],
         ],
         resize_keyboard=True
     )
 
-def invite_keyboard(event_id: int):
+def event_keyboard(event_id: int):
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
                     text="✅ Записатись",
-                    callback_data=InviteCallback(action="join", event_id=event_id).pack()
+                    callback_data=EventCallback(action="join", event_id=event_id).pack()
                 ),
                 InlineKeyboardButton(
-                    text="❌ Ігнорувати",
-                    callback_data=InviteCallback(action="ignore", event_id=event_id).pack()
-                ),
-            ]
-        ]
-    )
-
-def cancel_keyboard(event_id: int):
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="❌ Скасувати запис",
-                    callback_data=InviteCallback(action="cancel", event_id=event_id).pack()
+                    text="👥 Гравці",
+                    callback_data=EventCallback(action="players", event_id=event_id).pack()
                 )
             ]
         ]
     )
 
-# ================== START / NICKNAME ==================
+# ================== START ==================
 
 @dp.message(CommandStart())
-async def start_handler(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    username = message.from_user.username
-
+async def start(message: types.Message, state: FSMContext):
     conn = await get_connection()
     try:
         user = await conn.fetchrow(
-            "SELECT display_name, role FROM users WHERE user_id = $1",
-            user_id
+            "SELECT display_name, role FROM users WHERE user_id=$1",
+            message.from_user.id
         )
 
         if not user:
             await conn.execute(
-                "INSERT INTO users (user_id, username, role) VALUES ($1, $2, 'player')",
-                user_id, username
+                "INSERT INTO users (user_id, username, role) VALUES ($1,$2,'player')",
+                message.from_user.id,
+                message.from_user.username
             )
-            await message.answer("👋 Вітаю! Введіть ваш **нік**:", parse_mode="Markdown")
-            await state.set_state(NicknameState.waiting_for_nickname)
+            await message.answer("👋 Введіть ваш **нік**:", parse_mode="Markdown")
+            await state.set_state(Nickname.value)
             return
 
         if not user["display_name"]:
             await message.answer("Введіть ваш **нік**:", parse_mode="Markdown")
-            await state.set_state(NicknameState.waiting_for_nickname)
+            await state.set_state(Nickname.value)
             return
 
-        keyboard = admin_menu_keyboard() if user["role"] == "admin" else player_menu_keyboard()
-        await message.answer(
-            f"З поверненням, **{user['display_name']}** 👋",
-            parse_mode="Markdown",
-            reply_markup=keyboard
-        )
+        menu = admin_menu() if user["role"] == "admin" else player_menu()
+        await message.answer(f"З поверненням, **{user['display_name']}** 👋", reply_markup=menu, parse_mode="Markdown")
+
     finally:
         await conn.close()
 
-@dp.message(NicknameState.waiting_for_nickname)
-async def save_nickname(message: types.Message, state: FSMContext):
-    nickname = message.text.strip()
-    if not 2 <= len(nickname) <= 20:
-        await message.answer("❌ Нік має бути від 2 до 20 символів.")
-        return
+@dp.message(Nickname.value)
+async def save_nick(message: types.Message, state: FSMContext):
+    await get_connection().execute(
+        "UPDATE users SET display_name=$1 WHERE user_id=$2",
+        message.text.strip(),
+        message.from_user.id
+    )
+    await state.clear()
+    await message.answer("✅ Готово!", reply_markup=player_menu())
 
-    conn = await get_connection()
-    try:
-        await conn.execute(
-            "UPDATE users SET display_name = $1 WHERE user_id = $2",
-            nickname, message.from_user.id
-        )
-        await state.clear()
-        await message.answer(
-            f"✅ Ваш нік: **{nickname}**",
-            parse_mode="Markdown",
-            reply_markup=player_menu_keyboard()
-        )
-    finally:
-        await conn.close()
-
-# ================== CREATE EVENT (ADMIN) ==================
-
-@dp.message(F.text == "➕ Створити івент")
-async def create_event_start(message: types.Message, state: FSMContext):
-    conn = await get_connection()
-    try:
-        role = await conn.fetchval(
-            "SELECT role FROM users WHERE user_id = $1",
-            message.from_user.id
-        )
-        if role != "admin":
-            return
-    finally:
-        await conn.close()
-
-    await message.answer("📝 Введіть назву івенту:")
-    await state.set_state(CreateEventStates.title)
-
-@dp.message(CreateEventStates.title)
-async def event_title(message: types.Message, state: FSMContext):
-    await state.update_data(title=message.text)
-    await message.answer("📅 Введіть дату:")
-    await state.set_state(CreateEventStates.date)
-
-@dp.message(CreateEventStates.date)
-async def event_date(message: types.Message, state: FSMContext):
-    await state.update_data(date=message.text)
-    await message.answer("⏰ Введіть час:")
-    await state.set_state(CreateEventStates.time)
-
-@dp.message(CreateEventStates.time)
-async def event_time(message: types.Message, state: FSMContext):
-    await state.update_data(time=message.text)
-    await message.answer("📍 Вкажіть місце проведення:")
-    await state.set_state(CreateEventStates.location)
-
-@dp.message(CreateEventStates.location)
-async def event_location(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-
-    conn = await get_connection()
-    try:
-        event_id = await conn.fetchval(
-            """
-            INSERT INTO events (title, event_date, event_time, location, status, created_by)
-            VALUES ($1, $2, $3, $4, 'active', $5)
-            RETURNING event_id
-            """,
-            data["title"], data["date"], data["time"], message.text, message.from_user.id
-        )
-
-        players = await conn.fetch("SELECT user_id FROM users WHERE is_active = 1")
-
-        for p in players:
-            try:
-                await bot.send_message(
-                    p["user_id"],
-                    f"🎭 *{data['title']}*\n📅 {data['date']}\n⏰ {data['time']}\n📍 *{message.text}*",
-                    parse_mode="Markdown",
-                    reply_markup=invite_keyboard(event_id)
-                )
-            except Exception:
-                continue
-
-        await message.answer("✅ Івент створено та розіслано")
-        await state.clear()
-    finally:
-        await conn.close()
-
-# ================== PUBLIC PLAYER LIST ==================
-
-@dp.message(F.text == "👥 Список гравців")
-async def show_players_public(message: types.Message):
-    conn = await get_connection()
-    try:
-        event = await conn.fetchrow(
-            """
-            SELECT e.event_id, e.title
-            FROM registrations r
-            JOIN events e ON e.event_id = r.event_id
-            WHERE r.user_id = $1
-              AND r.status = 'active'
-              AND e.status = 'active'
-            ORDER BY r.created_at DESC
-            LIMIT 1
-            """,
-            message.from_user.id
-        )
-
-        if not event:
-            await message.answer("ℹ️ Ви не записані на жоден активний івент")
-            return
-
-        players = await conn.fetch(
-            """
-            SELECT u.display_name, r.comment
-            FROM registrations r
-            JOIN users u ON u.user_id = r.user_id
-            WHERE r.event_id = $1 AND r.status = 'active'
-            ORDER BY r.created_at
-            """,
-            event["event_id"]
-        )
-
-        text = f"👥 *Гравці на івенті:* _{event['title']}_\n\n"
-        for i, p in enumerate(players, 1):
-            suffix = f" ({p['comment']})" if p["comment"] else ""
-            text += f"{i}. {p['display_name']}{suffix}\n"
-
-        await message.answer(text, parse_mode="Markdown")
-    finally:
-        await conn.close()
-        
-# ================== ACTIVE EVENTS (PUBLIC) ==================
+# ================== ACTIVE EVENTS ==================
 
 @dp.message(F.text == "📅 Активні події")
-async def show_active_events(message: types.Message):
+async def active_events(message: types.Message):
     conn = await get_connection()
     try:
         events = await conn.fetch(
-            """
-            SELECT event_id, title, event_date, event_time, location
-            FROM events
-            WHERE status = 'active'
-            ORDER BY created_at DESC
-            """
+            "SELECT event_id,title,event_date,event_time,location FROM events WHERE status='active'"
         )
 
         if not events:
-            await message.answer("ℹ️ Наразі немає активних івентів")
+            await message.answer("ℹ️ Немає активних івентів")
             return
 
-        for ev in events:
+        for e in events:
             await message.answer(
-                (
-                    f"🎭 *{ev['title']}*\n"
-                    f"📅 {ev['event_date']}\n"
-                    f"⏰ {ev['event_time']}\n"
-                    f"📍 *{ev['location']}*"
-                ),
+                f"🎭 *{e['title']}*\n📅 {e['event_date']}\n⏰ {e['event_time']}\n📍 *{e['location']}*",
                 parse_mode="Markdown",
-                reply_markup=invite_keyboard(ev["event_id"])
+                reply_markup=event_keyboard(e["event_id"])
             )
-
     finally:
         await conn.close()
 
-# ================== WEBHOOK RUN ==================
+# ================== JOIN EVENT ==================
 
-async def start_all():
+@dp.callback_query(EventCallback.filter(F.action == "join"))
+async def join_event(cb: types.CallbackQuery, callback_data: EventCallback):
+    conn = await get_connection()
+    try:
+        exists = await conn.fetchval(
+            """
+            SELECT 1 FROM registrations
+            WHERE event_id=$1 AND user_id=$2 AND status='active'
+            """,
+            callback_data.event_id,
+            cb.from_user.id
+        )
+
+        if exists:
+            await cb.answer("Ви вже записані", show_alert=True)
+            return
+
+        await conn.execute(
+            "INSERT INTO registrations (event_id,user_id,status) VALUES ($1,$2,'active')",
+            callback_data.event_id,
+            cb.from_user.id
+        )
+
+        await cb.answer("✅ Ви записались!")
+    finally:
+        await conn.close()
+
+# ================== PLAYERS LIST ==================
+
+@dp.callback_query(EventCallback.filter(F.action == "players"))
+async def show_players(cb: types.CallbackQuery, callback_data: EventCallback):
+    conn = await get_connection()
+    try:
+        players = await conn.fetch(
+            """
+            SELECT u.display_name
+            FROM registrations r
+            JOIN users u ON u.user_id=r.user_id
+            WHERE r.event_id=$1 AND r.status='active'
+            ORDER BY r.created_at
+            """,
+            callback_data.event_id
+        )
+
+        if not players:
+            await cb.answer("Поки нікого немає", show_alert=True)
+            return
+
+        text = "👥 **Гравці:**\n\n"
+        for i, p in enumerate(players, 1):
+            text += f"{i}. {p['display_name']}\n"
+
+        await cb.message.answer(text, parse_mode="Markdown")
+        await cb.answer()
+    finally:
+        await conn.close()
+
+# ================== WEBHOOK ==================
+
+async def main():
     await init_db()
 
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(WEBHOOK_URL)
 
     app = web.Application()
-
-    SimpleRequestHandler(dp, bot).register(app, path=WEBHOOK_PATH)
+    SimpleRequestHandler(dp, bot).register(app, "/webhook")
     setup_application(app, dp, bot=bot)
 
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
+    await web.TCPSite(runner, "0.0.0.0", PORT).start()
 
-    print("🚀 Webhook bot started")
+    print("🚀 Bot started")
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    asyncio.run(start_all())
-
+    asyncio.run(main())
