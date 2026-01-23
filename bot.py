@@ -238,7 +238,7 @@ for p in players:
             parse_mode="Markdown",
             reply_markup=invite_keyboard(event_id)
         )
-        sent_count += 1
+        sent_count += 1   # ✅ СТРОГО ТУТ
     except Exception:
         continue
 
@@ -523,6 +523,93 @@ async def payment_done(callback: types.CallbackQuery):
                 parse_mode="Markdown"
             )
 
+# ================= CLOSE EVENT ======================
+@dp.message(F.text == "🏁 Завершити вечір")
+async def finish_evening_start(message: types.Message):
+    conn = await get_connection()
+    try:
+        role = await conn.fetchval(
+            "SELECT role FROM users WHERE user_id = $1",
+            message.from_user.id
+        )
+        if role != "admin":
+            await message.answer("❌ Доступно лише адміну")
+            return
+
+        events = await conn.fetch(
+            """
+            SELECT event_id, title, event_date
+            FROM events
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            """
+        )
+
+        if not events:
+            await message.answer("ℹ️ Немає активних івентів")
+            return
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=f"🏁 {e['title']} ({e['event_date']})",
+                        callback_data=f"finish_event_{e['event_id']}"
+                    )
+                ]
+                for e in events
+            ]
+        )
+
+        await message.answer("Оберіть івент для завершення:", reply_markup=kb)
+
+    finally:
+        await conn.close()
+        
+@dp.callback_query(F.data.startswith("finish_event_"))
+async def finish_event(callback: types.CallbackQuery):
+    event_id = int(callback.data.split("_")[-1])
+
+    conn = await get_connection()
+    try:
+        event = await conn.fetchrow(
+            "SELECT title FROM events WHERE event_id = $1 AND status = 'active'",
+            event_id
+        )
+        if not event:
+            await callback.answer("Івент вже завершено", show_alert=True)
+            return
+
+        players = await conn.fetch(
+            "SELECT user_id FROM registrations WHERE event_id = $1 AND status = 'active'",
+            event_id
+        )
+
+        await conn.execute(
+            "UPDATE events SET status = 'closed' WHERE event_id = $1",
+            event_id
+        )
+
+        for p in players:
+            try:
+                await callback.bot.send_message(
+                    p["user_id"],
+                    "🏁 Ігровий вечір завершено. Дякуємо за участь ❤️"
+                )
+            except Exception:
+                continue
+
+        await callback.message.edit_text(
+            f"🏁 Івент **{event['title']}** завершено.\n"
+            f"👥 Сповіщено гравців: **{len(players)}**",
+            parse_mode="Markdown"
+        )
+        await callback.answer("Івент завершено")
+
+    finally:
+        await conn.close()
+
+
 # ================== WEBHOOK ==================
 
 async def start_all():
@@ -555,6 +642,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
