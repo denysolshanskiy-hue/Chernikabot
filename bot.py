@@ -176,28 +176,29 @@ async def create_event_start(message: types.Message, state: FSMContext):
     finally:
         await conn.close()
 
+    await state.clear()
     await message.answer("📝 Введіть назву івенту:")
-    await state.set_state(CreateEventStates.waiting_for_title)
+    await state.set_state(CreateEventStates.title)
     
-@dp.message(CreateEventStates.waiting_for_title)
+@dp.message(CreateEventStates.title)
 async def create_event_title(message: types.Message, state: FSMContext):
     await state.update_data(title=message.text.strip())
     await message.answer("📅 Введіть дату івенту (наприклад: 20.01):")
-    await state.set_state(CreateEventStates.waiting_for_date)
+    await state.set_state(CreateEventStates.date)
 
-@dp.message(CreateEventStates.waiting_for_date)
+@dp.message(CreateEventStates.date)
 async def create_event_date(message: types.Message, state: FSMContext):
     await state.update_data(event_date=message.text.strip())
-    await message.answer("⏰ Введіть час (наприклад: 19:00):")
-    await state.set_state(CreateEventStates.waiting_for_time)
+    await message.answer("⏰ Введіть час івенту (наприклад: 19:00):")
+    await state.set_state(CreateEventStates.time)
 
-@dp.message(CreateEventStates.waiting_for_time)
+@dp.message(CreateEventStates.time)
 async def create_event_time(message: types.Message, state: FSMContext):
     await state.update_data(event_time=message.text.strip())
     await message.answer("📍 Вкажіть місце проведення:")
-    await state.set_state(CreateEventStates.waiting_for_location)
+    await state.set_state(CreateEventStates.location)
 
-@dp.message(CreateEventStates.waiting_for_location)
+@dp.message(CreateEventStates.location)
 async def create_event_location(message: types.Message, state: FSMContext):
     data = await state.get_data()
 
@@ -233,7 +234,7 @@ async def create_event_location(message: types.Message, state: FSMContext):
                         f"📍 *{location}*"
                     ),
                     parse_mode="Markdown",
-                    reply_markup=invite_keyboard(event_id),
+                    reply_markup=invite_keyboard(event_id)
                 )
             except Exception:
                 continue
@@ -452,6 +453,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
