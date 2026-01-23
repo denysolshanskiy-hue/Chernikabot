@@ -274,6 +274,40 @@ async def show_players_public(message: types.Message):
         await message.answer(text, parse_mode="Markdown")
     finally:
         await conn.close()
+        
+# ================== ACTIVE EVENTS (PUBLIC) ==================
+
+@dp.message(F.text == "📅 Активні події")
+async def show_active_events(message: types.Message):
+    conn = await get_connection()
+    try:
+        events = await conn.fetch(
+            """
+            SELECT event_id, title, event_date, event_time, location
+            FROM events
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            """
+        )
+
+        if not events:
+            await message.answer("ℹ️ Наразі немає активних івентів")
+            return
+
+        for ev in events:
+            await message.answer(
+                (
+                    f"🎭 *{ev['title']}*\n"
+                    f"📅 {ev['event_date']}\n"
+                    f"⏰ {ev['event_time']}\n"
+                    f"📍 *{ev['location']}*"
+                ),
+                parse_mode="Markdown",
+                reply_markup=invite_keyboard(ev["event_id"])
+            )
+
+    finally:
+        await conn.close()
 
 # ================== WEBHOOK RUN ==================
 
@@ -298,3 +332,4 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
