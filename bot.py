@@ -174,10 +174,11 @@ async def show_players(cb: types.CallbackQuery, callback_data: EventCallback):
     try:
         players = await conn.fetch(
             """
-            SELECT u.display_name
+            SELECT u.display_name, r.comment
             FROM registrations r
-            JOIN users u ON u.user_id=r.user_id
-            WHERE r.event_id=$1 AND r.status='active'
+            JOIN users u ON u.user_id = r.user_id
+            WHERE r.event_id = $1
+              AND r.status = 'active'
             ORDER BY r.created_at
             """,
             callback_data.event_id
@@ -189,10 +190,12 @@ async def show_players(cb: types.CallbackQuery, callback_data: EventCallback):
 
         text = "👥 **Гравці:**\n\n"
         for i, p in enumerate(players, 1):
-            text += f"{i}. {p['display_name']}\n"
+            comment = f" ({p['comment']})" if p["comment"] else ""
+            text += f"{i}. {p['display_name']}{comment}\n"
 
         await cb.message.answer(text, parse_mode="Markdown")
         await cb.answer()
+
     finally:
         await conn.close()
 
@@ -217,3 +220,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
