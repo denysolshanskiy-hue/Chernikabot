@@ -837,12 +837,15 @@ async def start_all():
     await site.start()
 
     print("🚀 Webhook bot started")
+    
+    await asyncio.Event().wait()
 
 if __name__ == "__main__":
     try:
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
