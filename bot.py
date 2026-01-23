@@ -198,6 +198,57 @@ async def show_players(cb: types.CallbackQuery, callback_data: EventCallback):
 
     finally:
         await conn.close()
+#========================= ОПЛАТИ =====================================
+@dp.message(F.text == "💳 Оплатити ігри")
+async def pay_games(message: types.Message):
+    await message.answer(
+        (
+            "💳 **Оплата ігрових вечорів**\n\n"
+            "**М А Ф І Я**\n\n"
+            "🎭 Ігровий вечір — **350 грн**\n"
+            "🎲 Одна гра — **150 грн**\n\n"
+            "🔗 **Посилання на банку:**\n"
+            "https://send.monobank.ua/jar/7eyHDYKjeX\n\n"
+            "💳 **Номер картки банки:**\n"
+            "`4874 1000 2416 5600`\n\n"
+            "Після оплати натисніть кнопку нижче 👇"
+        ),
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="💳 Я оплатив", callback_data="payment_done")]
+            ]
+        )
+    )
+    
+@dp.callback_query(F.data == "payment_done")
+async def payment_done(callback: types.CallbackQuery):
+    conn = await get_connection()
+    try:
+        user = await conn.fetchrow(
+            "SELECT display_name FROM users WHERE user_id = $1",
+            callback.from_user.id
+        )
+        name = user["display_name"] if user else callback.from_user.full_name
+
+        admins = await conn.fetch(
+            "SELECT user_id FROM users WHERE role = 'admin' AND is_active = 1"
+        )
+    finally:
+        await conn.close()
+
+    await callback.answer("Дякуємо за оплату 💚")
+    await callback.message.edit_reply_markup(None)
+    await callback.message.reply("✅ Оплату зафіксовано. Дякуємо 🙏")
+
+    for admin in admins:
+        if admin["user_id"] != callback.from_user.id:
+            await callback.bot.send_message(
+                admin["user_id"],
+                f"💳 **Оплата**\n👤 {name}\n🆔 `{callback.from_user.id}`",
+                parse_mode="Markdown"
+            )
+
 
 # ================== WEBHOOK ==================
 
@@ -220,4 +271,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
