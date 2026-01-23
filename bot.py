@@ -32,6 +32,7 @@ class CreateEventStates(StatesGroup):
     waiting_for_title = State()
     waiting_for_date = State()
     waiting_for_time = State()
+    waiting_for_location = State()
 
 class NicknameState(StatesGroup):
     waiting_for_nickname = State()
@@ -269,55 +270,58 @@ async def create_event_date(message: types.Message, state: FSMContext):
     await state.update_data(event_date=message.text)
     await message.answer("⏰ Введіть час (наприклад: 19:00):")
     await state.set_state(CreateEventStates.waiting_for_time)
-
+    
 @dp.message(CreateEventStates.waiting_for_time)
 async def create_event_time(message: types.Message, state: FSMContext):
+    await state.update_data(event_time=message.text)
+    await message.answer("📍 Вкажіть **місце проведення** (адреса / назва локації):")
+    await state.set_state(CreateEventStates.waiting_for_location)
+
+@dp.message(CreateEventStates.waiting_for_location)
+async def create_event_location(message: types.Message, state: FSMContext):
     data = await state.get_data()
+
     title = data["title"]
     event_date = data["event_date"]
-    event_time = message.text
+    event_time = data["event_time"]
+    location = message.text
     admin_id = message.from_user.id
 
     conn = await get_connection()
     try:
-        # 1. Зберігаємо івент у базу
         event_id = await conn.fetchval(
             """
-            INSERT INTO events (title, event_date, event_time, status, created_by)
-            VALUES ($1, $2, $3, 'active', $4)
+            INSERT INTO events (title, event_date, event_time, location, status, created_by)
+            VALUES ($1, $2, $3, $4, 'active', $5)
             RETURNING event_id
             """,
-            title, event_date, event_time, admin_id,
+            title, event_date, event_time, location, admin_id
         )
 
-        # 2. Отримуємо список усіх активних гравців
         players = await conn.fetch("SELECT user_id FROM users WHERE is_active = 1")
-        
-        # 3. Розсилаємо повідомлення
-        sent_count = 0
+
         for p in players:
             try:
                 await bot.send_message(
-                    p['user_id'],
-                    f"🔔 *Новий івент!*\n\n🎭 *{title}*\n📅 {event_date}\n⏰ {event_time}",
+                    p["user_id"],
+                    (
+                        f"🎭 *{title}*\n"
+                        f"📅 {event_date}\n"
+                        f"⏰ {event_time}\n"
+                        f"📍 *{location}*"
+                    ),
                     parse_mode="Markdown",
                     reply_markup=invite_keyboard(event_id),
                 )
-                sent_count += 1
             except Exception:
-                # Пропускаємо, якщо бот заблокований користувачем
                 continue
 
-        # 4. Очищуємо стан та видаємо звіт як на скріншоті
+        await message.answer("✅ Івент створено та розіслано")
         await state.clear()
-        await message.answer(
-            f"✅ Івент створено!\n"
-            f"📢 Запрошення розіслано гравцям: **{sent_count}**",
-            parse_mode="Markdown"
-        )
-        
+
     finally:
         await conn.close()
+
 #=================== COMMIT EVENT ====================
 @dp.message(F.text == "✅ Підтвердити вечір")
 async def confirm_event_start(message: types.Message):
@@ -845,6 +849,7 @@ if __name__ == "__main__":
         asyncio.run(start_all())
     except (KeyboardInterrupt, SystemExit):
         pass
+
 
 
 
