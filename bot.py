@@ -608,6 +608,90 @@ async def finish_event(callback: types.CallbackQuery):
 
     finally:
         await conn.close()
+# ===================== COMMIT EVENT ======================================
+@dp.message(F.text == "✅ Підтвердити подію")
+async def confirm_event_start(message: types.Message):
+    conn = await get_connection()
+    try:
+        role = await conn.fetchval(
+            "SELECT role FROM users WHERE user_id = $1",
+            message.from_user.id
+        )
+        if role != "admin":
+            return
+
+        event = await conn.fetchrow(
+            """
+            SELECT event_id, title, event_date
+            FROM events
+            WHERE status = 'active'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """
+        )
+
+        if not event:
+            await message.answer("ℹ️ Немає активних івентів для підтвердження.")
+            return
+
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🚀 ВІДПРАВИТИ ПІДТВЕРДЖЕННЯ",
+                        callback_data=f"send_confirm_{event['event_id']}"
+                    )
+                ]
+            ]
+        )
+
+        await message.answer(
+            f"❓ Надіслати підтвердження гравцям?\n\n"
+            f"🎭 *{event['title']}*\n📅 {event['event_date']}",
+            parse_mode="Markdown",
+            reply_markup=kb
+        )
+
+    finally:
+        await conn.close()
+@dp.callback_query(F.data.startswith("send_confirm_"))
+async def send_event_confirmation(callback: types.CallbackQuery):
+    event_id = int(callback.data.split("_")[-1])
+
+    conn = await get_connection()
+    try:
+        players = await conn.fetch(
+            """
+            SELECT user_id
+            FROM registrations
+            WHERE event_id = $1 AND status = 'active'
+            """,
+            event_id
+        )
+
+        if not players:
+            await callback.answer("Ніхто не записаний", show_alert=True)
+            return
+
+        sent = 0
+        for p in players:
+            try:
+                await callback.bot.send_message(
+                    p["user_id"],
+                    "✅ Ігрова подія підтверджена! Чекаємо на тебе 🫶"
+                )
+                sent += 1
+            except Exception:
+                continue
+
+        await callback.message.edit_text(
+            f"✅ Підтвердження надіслано\n👥 Гравців: **{sent}**",
+            parse_mode="Markdown"
+        )
+        await callback.answer("Готово")
+
+    finally:
+        await conn.close()
 
 
 # ================== WEBHOOK ==================
@@ -642,6 +726,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
