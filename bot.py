@@ -58,7 +58,7 @@ def admin_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="➕ Створити івент"), KeyboardButton(text="📅 Активні події")],
-            [KeyboardButton(text="👥 Список гравців"), KeyboardButton(text="🛠 Адмін: список + скасовані")],
+            [KeyboardButton(text="🛠 Адмін: список + скасовані")],
             [KeyboardButton(text="✅ Підтвердити подію"), KeyboardButton(text="💳 Оплатити ігри")],
             [KeyboardButton(text="🏁 Завершити вечір"), KeyboardButton(text="❌ Скасувати івент")],
         ],
@@ -69,7 +69,6 @@ def player_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="📅 Активні події")],
-            [KeyboardButton(text="👥 Список гравців")],
             [KeyboardButton(text="💳 Оплатити ігри")],
         ],
         resize_keyboard=True
@@ -159,6 +158,90 @@ async def save_nickname(message: types.Message, state: FSMContext):
             parse_mode="Markdown",
             reply_markup=player_menu_keyboard()
         )
+    finally:
+        await conn.close()
+
+# ================= CREATE EVENT ===================
+@dp.message(F.text == "➕ Створити івент")
+async def create_event_start(message: types.Message, state: FSMContext):
+    conn = await get_connection()
+    try:
+        role = await conn.fetchval(
+            "SELECT role FROM users WHERE user_id = $1",
+            message.from_user.id
+        )
+        if role != "admin":
+            await message.answer("❌ Створення івентів доступне лише адміну")
+            return
+    finally:
+        await conn.close()
+
+    await state.clear()
+    await message.answer("📝 Введіть назву івенту:")
+    await state.set_state(CreateEventStates.waiting_for_title)
+    
+@dp.message(CreateEventStates.waiting_for_title)
+async def create_event_title(message: types.Message, state: FSMContext):
+    await state.update_data(title=message.text.strip())
+    await message.answer("📅 Введіть дату івенту (наприклад: 20.01):")
+    await state.set_state(CreateEventStates.waiting_for_date)
+
+@dp.message(CreateEventStates.waiting_for_date)
+async def create_event_date(message: types.Message, state: FSMContext):
+    await state.update_data(event_date=message.text.strip())
+    await message.answer("⏰ Введіть час (наприклад: 19:00):")
+    await state.set_state(CreateEventStates.waiting_for_time)
+
+@dp.message(CreateEventStates.waiting_for_time)
+async def create_event_time(message: types.Message, state: FSMContext):
+    await state.update_data(event_time=message.text.strip())
+    await message.answer("📍 Вкажіть місце проведення:")
+    await state.set_state(CreateEventStates.waiting_for_location)
+
+@dp.message(CreateEventStates.waiting_for_location)
+async def create_event_location(message: types.Message, state: FSMContext):
+    data = await state.get_data()
+
+    title = data["title"]
+    event_date = data["event_date"]
+    event_time = data["event_time"]
+    location = message.text.strip()
+    admin_id = message.from_user.id
+
+    conn = await get_connection()
+    try:
+        event_id = await conn.fetchval(
+            """
+            INSERT INTO events (title, event_date, event_time, location, status, created_by)
+            VALUES ($1, $2, $3, $4, 'active', $5)
+            RETURNING event_id
+            """,
+            title, event_date, event_time, location, admin_id
+        )
+
+        players = await conn.fetch(
+            "SELECT user_id FROM users WHERE is_active = 1"
+        )
+
+        for p in players:
+            try:
+                await message.bot.send_message(
+                    p["user_id"],
+                    (
+                        f"🎭 *{title}*\n"
+                        f"📅 {event_date}\n"
+                        f"⏰ {event_time}\n"
+                        f"📍 *{location}*"
+                    ),
+                    parse_mode="Markdown",
+                    reply_markup=invite_keyboard(event_id),
+                )
+            except Exception:
+                continue
+
+        await message.answer("✅ Івент створено та розіслано гравцям")
+        await state.clear()
+
     finally:
         await conn.close()
 
@@ -370,6 +453,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
