@@ -22,6 +22,7 @@ from database import get_connection, init_db
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 10000))
+WEBHOOK_PATH = "/webhook"
 
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is not set")
@@ -369,6 +370,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
