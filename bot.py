@@ -339,22 +339,34 @@ async def payment_done(callback: types.CallbackQuery):
 
 # ================== WEBHOOK ==================
 
-async def main():
+async def start_all():
     await init_db()
 
     await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook(WEBHOOK_URL)
+    await bot.set_webhook(f"{WEBHOOK_URL}{WEBHOOK_PATH}")
 
     app = web.Application()
-    SimpleRequestHandler(dp, bot).register(app, "/webhook")
+
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot
+    ).register(app, path=WEBHOOK_PATH)
+
     setup_application(app, dp, bot=bot)
 
     runner = web.AppRunner(app)
     await runner.setup()
-    await web.TCPSite(runner, "0.0.0.0", PORT).start()
+    site = web.TCPSite(
+        runner,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 10000)),
+    )
+    await site.start()
 
-    print("🚀 Bot started")
+    print("🚀 Webhook bot started")
     await asyncio.Event().wait()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
+
