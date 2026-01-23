@@ -223,28 +223,32 @@ async def create_event_location(message: types.Message, state: FSMContext):
             "SELECT user_id FROM users WHERE is_active = 1"
         )
 
-        for p in players:
-            try:
-                await message.bot.send_message(
-                    p["user_id"],
-                    (
-                        f"🎭 *{title}*\n"
-                        f"📅 {event_date}\n"
-                        f"⏰ {event_time}\n"
-                        f"📍 *{location}*"
-                    ),
-                    parse_mode="Markdown",
-                    reply_markup=invite_keyboard(event_id)
-                )
-                        sent_count += 1
-            except Exception:
-                continue
+sent_count = 0
 
-        await message.answer("✅ Івент створено та розіслано гравцям (**{sent_count}**)"
-        await state.clear()
+for p in players:
+    try:
+        await message.bot.send_message(
+            p["user_id"],
+            (
+                f"🎭 *{title}*\n"
+                f"📅 {event_date}\n"
+                f"⏰ {event_time}\n"
+                f"📍 *{location}*"
+            ),
+            parse_mode="Markdown",
+            reply_markup=invite_keyboard(event_id)
+        )
+        sent_count += 1
+    except Exception:
+        continue
 
-    finally:
-        await conn.close()
+await message.answer(
+    f"✅ Івент створено та розіслано гравцям (**{sent_count}**)",
+    parse_mode="Markdown"
+)
+
+await state.clear()
+
 
 # ================== ACTIVE EVENTS ==================
 
@@ -551,6 +555,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
