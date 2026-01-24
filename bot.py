@@ -86,6 +86,12 @@ def invite_keyboard(event_id: int):
                     text="👥 Гравці",
                     callback_data=InviteCallback(action="players", event_id=event_id).pack()
                 ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Скасувати мій запис",
+                    callback_data=InviteCallback(action="cancel", event_id=event_id).pack()
+                )
             ]
         ]
     )
@@ -286,7 +292,7 @@ async def show_active_events(message: types.Message):
     finally:
         await conn.close()
 
-# ================== JOIN EVENT ==================
+# ================== JOIN\CANCEL EVENT ==================
 
 @dp.callback_query(InviteCallback.filter(F.action == "join"))
 async def join_event(callback: types.CallbackQuery, callback_data: InviteCallback, state: FSMContext):
@@ -346,6 +352,36 @@ async def save_comment(message: types.Message, state: FSMContext):
     finally:
         await conn.close()
 
+@dp.callback_query(InviteCallback.filter(F.action == "cancel"))
+async def cancel_registration(callback: types.CallbackQuery, callback_data: InviteCallback):
+    user_id = callback.from_user.id
+    event_id = callback_data.event_id
+
+    conn = await get_connection()
+    try:
+        # Перевіряємо, чи є активний запис
+        reg = await conn.fetchrow(
+            "SELECT 1 FROM registrations WHERE event_id = $1 AND user_id = $2 AND status = 'active'",
+            event_id, user_id
+        )
+
+        if not reg:
+            await callback.answer("⚠️ Ви не записані на цю подію або запис уже скасовано", show_alert=True)
+            return
+
+        # Змінюємо статус на 'cancelled'
+        await conn.execute(
+            "UPDATE registrations SET status = 'cancelled' WHERE event_id = $1 AND user_id = $2",
+            event_id, user_id
+        )
+
+        await callback.answer("✅ Ваш запис скасовано", show_alert=True)
+        
+        # Опціонально: можна редагувати повідомлення або просто видалити клавіатуру скасування
+        # Але краще просто залишити як є, щоб юзер міг записатися знову, якщо натиснув випадково.
+
+    finally:
+        await conn.close()
 # ================== CANCEL EVENT ==================
 
 @dp.message(F.text == "❌ Скасувати івент")
@@ -797,6 +833,7 @@ async def start_all():
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
