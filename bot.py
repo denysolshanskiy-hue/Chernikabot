@@ -761,6 +761,9 @@ async def admin_players_with_cancelled(message: types.Message):
 
 # ================== WEBHOOK ==================
 
+async def handle_ping(request):
+    return web.Response(text="Bot is alive", status=200)
+
 async def start_all():
     await init_db()
 
@@ -768,6 +771,9 @@ async def start_all():
     await bot.set_webhook(f"{WEBHOOK_URL}{WEBHOOK_PATH}")
 
     app = web.Application()
+    
+    # Додаємо цей рядок! Це "заплатка" для Render та Cron-job
+    app.router.add_get("/", handle_ping) 
 
     SimpleRequestHandler(
         dispatcher=dp,
@@ -781,16 +787,17 @@ async def start_all():
     site = web.TCPSite(
         runner,
         host="0.0.0.0",
-        port=int(os.environ.get("PORT", 10000)),
+        port=PORT,
     )
     await site.start()
 
-    print("🚀 Webhook bot started")
+    print(f"🚀 Webhook bot started on port {PORT}")
     await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
     asyncio.run(start_all())
+
 
 
 
