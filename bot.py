@@ -521,9 +521,7 @@ async def pay_games(message: types.Message):
             "🎭 Ігровий вечір — **350 грн**\n"
             "🎲 Одна гра — **150 грн**\n\n"
             "🔗 **Посилання на банку:**\n"
-            "https://send.monobank.ua/jar/7eyHDYKjeX\n\n"
-            "💳 **Номер картки банки:**\n"
-            "`4874 1000 2416 5600`\n\n"
+            "https://secure.wayforpay.com/button/bbb36f0abdfb2"
             "Після оплати натисніть кнопку 👇"
         ),
         parse_mode="Markdown",
